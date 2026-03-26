@@ -21,8 +21,8 @@ open class STCompletionWindowController: NSWindowController {
         let contentViewController = viewController
 
         let window = STCompletionWindow(contentViewController: contentViewController)
-        window.setContentSize(CGSize(width: 450, height: 22 * 6.5))
-        window.contentMinSize = CGSize(width: 300, height: 50)
+        window.setContentSize(CGSize(width: 350, height: 50))
+        window.contentMinSize = CGSize(width: 250, height: 30)
         window.styleMask = [.resizable, .fullSizeContentView]
         window.autorecalculatesKeyViewLoop = true
         window.isReleasedWhenClosed = true
@@ -72,6 +72,13 @@ open class STCompletionWindowController: NSWindowController {
         }
 
         completionViewController.items = items
+
+        // Dynamic height: fit to actual item count (max 8 visible)
+        let rowHeight: CGFloat = 24
+        let maxVisible = min(items.count, 8)
+        let dynamicHeight = max(CGFloat(maxVisible) * rowHeight + 8, window.contentMinSize.height)
+        let currentSize = window.frame.size
+        window.setContentSize(CGSize(width: currentSize.width, height: dynamicHeight))
         window.setFrameTopLeftPoint(origin)
     }
 
