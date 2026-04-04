@@ -196,7 +196,7 @@ private class STTableRowView: NSTableRowView {
 
             let radius = (_parentCornerRadius - _inset) / 2
             let path = NSBezierPath(roundedRect: bounds, xRadius: radius, yRadius: radius)
-            context.setFillColor(NSColor.highlightColor.withAlphaComponent(isDark ? 0.2 : 1).cgColor)
+            context.setFillColor(NSColor.controlAccentColor.withAlphaComponent(isDark ? 0.3 : 0.15).cgColor)
             path.fill()
             context.restoreGState()
         }
