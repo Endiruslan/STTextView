@@ -22,7 +22,7 @@ open class STCompletionWindowController: NSWindowController {
 
         let window = STCompletionWindow(contentViewController: contentViewController)
         window.setContentSize(CGSize(width: 350, height: 50))
-        window.contentMinSize = CGSize(width: 250, height: 30)
+        window.contentMinSize = CGSize(width: 250, height: 0)
         window.styleMask = [.resizable, .fullSizeContentView]
         window.autorecalculatesKeyViewLoop = true
         window.isReleasedWhenClosed = true
