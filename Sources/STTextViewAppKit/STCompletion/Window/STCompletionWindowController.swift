@@ -73,10 +73,11 @@ open class STCompletionWindowController: NSWindowController {
 
         completionViewController.items = items
 
-        // Dynamic height: fit to actual item count (max 8 visible)
-        let rowHeight: CGFloat = 24
+        // Dynamic height: fit to actual item count (max 8 visible),
+        // using the real row height from the table view.
+        let rowHeight = completionViewController.tableView?.rowHeight ?? 24
         let maxVisible = min(items.count, 8)
-        let dynamicHeight = max(CGFloat(maxVisible) * rowHeight + 8, window.contentMinSize.height)
+        let dynamicHeight = max(CGFloat(maxVisible) * rowHeight, window.contentMinSize.height)
         let currentSize = window.frame.size
         window.setContentSize(CGSize(width: currentSize.width, height: dynamicHeight))
         window.setFrameTopLeftPoint(origin)
