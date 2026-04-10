@@ -6,12 +6,12 @@ import STTextViewCommon
 
 final class STGutterLineNumberCell: NSView {
     /// Line number
-    let lineNumber: Int
-    let firstBaseline: CGFloat
+    private(set) var lineNumber: Int
+    private(set) var firstBaseline: CGFloat
     /// Y position from cell top to the visual center of the line number text
-    let textVisualCenter: CGFloat
-    private let ctLine: CTLine
-    let textSize: CGSize
+    private(set) var textVisualCenter: CGFloat
+    private var ctLine: CTLine
+    private(set) var textSize: CGSize
     var insets = STRulerInsets()
 
     override func animation(forKey key: NSAnimatablePropertyKey) -> Any? {
@@ -58,6 +58,30 @@ final class STGutterLineNumberCell: NSView {
             layer?.borderColor = NSColor.systemOrange.cgColor
             layer?.borderWidth = 0.5
         }
+    }
+
+    /// Update the cell in-place for view recycling (avoids remove + recreate on every scroll frame).
+    func update(firstBaseline: CGFloat, attributes: [NSAttributedString.Key: Any], number: Int) {
+        self.lineNumber = number
+        self.firstBaseline = firstBaseline
+
+        let attributedString = NSAttributedString(string: "\(number)", attributes: attributes)
+        self.ctLine = CTLineCreateWithAttributedString(attributedString)
+
+        var ascent: CGFloat = 0
+        var descent: CGFloat = 0
+        let typographicsBoundsWidth = CTLineGetTypographicBounds(ctLine, &ascent, &descent, nil)
+
+        self.textVisualCenter = firstBaseline + (descent - ascent) / 2
+
+        if let paragraphStyle = attributes[.paragraphStyle] as? NSParagraphStyle {
+            let lineHeight = floor(ctLine.height() * paragraphStyle.stLineHeightMultiple)
+            self.textSize = CGSize(width: ceil(typographicsBoundsWidth), height: lineHeight)
+        } else {
+            self.textSize = CGSize(width: ceil(typographicsBoundsWidth), height: ctLine.height())
+        }
+
+        needsDisplay = true
     }
 
     override var isFlipped: Bool {

@@ -64,12 +64,6 @@ extension STTextView {
             return
         }
 
-        gutterView.containerView.subviews.compactMap {
-            $0 as? STGutterLineNumberCell
-        }.forEach {
-            $0.removeFromSuperviewWithoutNeedingDisplay()
-        }
-
         let lineTextAttributes: [NSAttributedString.Key: Any] = [
             .font: gutterView.font,
             .foregroundColor: gutterView.textColor
@@ -81,18 +75,22 @@ extension STTextView {
 
         // if empty document
         if textLayoutManager.documentRange.isEmpty {
+            // Remove all existing cells for empty document
+            gutterView.containerView.subviews.compactMap {
+                $0 as? STGutterLineNumberCell
+            }.forEach {
+                $0.removeFromSuperviewWithoutNeedingDisplay()
+            }
+
             if let selectionFrame = textLayoutManager.textSegmentFrame(at: textLayoutManager.documentRange.location, type: .standard) {
                 let lineNumber = 1
 
-                // Use typingAttributes to calculate baseline position for empty document.
-                // The cell is sized for typingLineHeight, so baseline calculation should use typing font metrics
-                // to match where text baseline would be. Line number is still drawn with gutter font.
                 let ctNumberLine = CTLineCreateWithAttributedString(NSAttributedString(string: "\(lineNumber)", attributes: typingAttributes))
                 let baselineParagraphStyle = typingAttributes[.paragraphStyle] as? NSParagraphStyle ?? defaultParagraphStyle
                 let baselineOffset = -(ctNumberLine.typographicHeight() * (baselineParagraphStyle.stLineHeightMultiple - 1.0) / 2)
 
                 var effectiveLineTextAttributes = lineTextAttributes
-                if gutterView.highlightSelectedLine /* , isLineSelected */, !selectedLineTextAttributes.isEmpty {
+                if gutterView.highlightSelectedLine, !selectedLineTextAttributes.isEmpty {
                     effectiveLineTextAttributes.merge(selectedLineTextAttributes, uniquingKeysWith: { (_, new) in new })
                 }
 
@@ -108,8 +106,6 @@ extension STTextView {
                     numberCell.layer?.backgroundColor = gutterView.selectedLineHighlightColor.cgColor
                 }
 
-                // For empty documents, ignore bounce scrolling by treating scroll offset as 0
-                // Empty document fits in viewport, so any scroll is just bounce effect
                 numberCell.frame = CGRect(
                     origin: CGPoint(
                         x: 0,
@@ -124,7 +120,6 @@ extension STTextView {
                 gutterView.containerView.addSubview(numberCell)
             }
         } else if let viewportRange = textLayoutManager.textViewportLayoutController.viewportRange {
-            // Get visible fragment views from the map and sort by document order
             let visibleFragmentViews = STGutterCalculations.visibleFragmentViewsInViewport(
                 fragmentViewMap: fragmentViewMap,
                 viewportRange: viewportRange
@@ -134,26 +129,48 @@ extension STTextView {
                 return
             }
 
-            // Calculate how many lines exist before the viewport
-            let textElementsBeforeViewport = textContentManager.textElements(
-                for: NSTextRange(
-                    location: textLayoutManager.documentRange.location,
-                    end: viewportRange.location
-                )!
-            )
+            // Count lines before viewport using character offset + newline counting
+            // instead of textElements(for:) which enumerates all paragraphs (O(n))
+            let startLineIndex: Int
+            let docStart = textLayoutManager.documentRange.location
+            let vpStart = viewportRange.location
+            if docStart.compare(vpStart) == .orderedSame {
+                startLineIndex = 0
+            } else if let preRange = NSTextRange(location: docStart, end: vpStart),
+                      let storage = textContentManager as? NSTextContentStorage,
+                      let textStorage = storage.textStorage {
+                let charStart = storage.offset(from: docStart, to: preRange.location)
+                let charEnd = storage.offset(from: docStart, to: preRange.endLocation)
+                let nsRange = NSRange(location: charStart, length: max(0, charEnd - charStart))
+                if nsRange.length > 0, nsRange.location + nsRange.length <= textStorage.length {
+                    var count = 0
+                    let string = textStorage.string as NSString
+                    string.enumerateSubstrings(in: nsRange, options: [.byParagraphs, .substringNotRequired]) { _, _, _, _ in
+                        count += 1
+                    }
+                    startLineIndex = count
+                } else {
+                    startLineIndex = 0
+                }
+            } else {
+                startLineIndex = 0
+            }
+
+            // Collect reusable cells from the existing subviews
+            var reusableCells: [STGutterLineNumberCell] = gutterView.containerView.subviews.compactMap {
+                $0 as? STGutterLineNumberCell
+            }
 
             var requiredWidthFitText = gutterView.minimumThickness
-            let startLineIndex = textElementsBeforeViewport.count
             var linesCount = 0
+            var usedCellCount = 0
 
             for (layoutFragment, fragmentView) in visibleFragmentViews {
                 let contentRangeInElement = (layoutFragment.textElement as? NSTextParagraph)?.paragraphContentRange ?? layoutFragment.rangeInElement
 
-                // Only show line numbers for the first line fragment or extra line fragments
                 for textLineFragment in layoutFragment.textLineFragments where (textLineFragment.isExtraLineFragment || layoutFragment.textLineFragments.first == textLineFragment) {
                     let lineNumber = startLineIndex + linesCount + 1
 
-                    // Determine if this line is selected
                     let isLineSelected = STGutterCalculations.isLineSelected(
                         textLineFragment: textLineFragment,
                         layoutFragment: layoutFragment,
@@ -161,15 +178,12 @@ extension STTextView {
                         textLayoutManager: textLayoutManager
                     )
 
-                    // Calculate positioning metrics
-                    // Get the actual fragment view frame for pixel-perfect alignment
                     let (baselineYOffset, locationForFirstCharacter, cellFrame) = STGutterCalculations.calculateLineNumberMetrics(
                         for: textLineFragment,
                         in: layoutFragment,
                         fragmentViewFrame: fragmentView.frame
                     )
 
-                    // Prepare text attributes
                     var effectiveLineTextAttributes = lineTextAttributes
                     if gutterView.highlightSelectedLine, isLineSelected, !selectedLineTextAttributes.isEmpty {
                         effectiveLineTextAttributes.merge(selectedLineTextAttributes, uniquingKeysWith: { (_, new) in new })
@@ -178,22 +192,33 @@ extension STTextView {
                         effectiveLineTextAttributes[.paragraphStyle] = paragraphStyle
                     }
 
-                    // Create and configure line number cell
-                    let numberCell = STGutterLineNumberCell(
-                        firstBaseline: locationForFirstCharacter.y + baselineYOffset,
-                        attributes: effectiveLineTextAttributes,
-                        number: lineNumber
-                    )
+                    // Reuse existing cell or create new one
+                    let numberCell: STGutterLineNumberCell
+                    if usedCellCount < reusableCells.count {
+                        numberCell = reusableCells[usedCellCount]
+                        numberCell.update(
+                            firstBaseline: locationForFirstCharacter.y + baselineYOffset,
+                            attributes: effectiveLineTextAttributes,
+                            number: lineNumber
+                        )
+                    } else {
+                        numberCell = STGutterLineNumberCell(
+                            firstBaseline: locationForFirstCharacter.y + baselineYOffset,
+                            attributes: effectiveLineTextAttributes,
+                            number: lineNumber
+                        )
+                        gutterView.containerView.addSubview(numberCell)
+                    }
                     numberCell.insets = gutterView.insets
 
-                    // Apply selection highlight if needed
                     if gutterView.highlightSelectedLine, isLineSelected,
                        textLayoutManager.textSelectionsRanges(.withoutInsertionPoints).isEmpty,
                        !textLayoutManager.insertionPointSelections.isEmpty {
                         numberCell.layer?.backgroundColor = gutterView.selectedLineHighlightColor.cgColor
+                    } else {
+                        numberCell.layer?.backgroundColor = nil
                     }
 
-                    // Position the cell
                     numberCell.frame = CGRect(
                         origin: CGPoint(
                             x: 0,
@@ -205,13 +230,18 @@ extension STTextView {
                         )
                     ).pixelAligned
 
-                    gutterView.containerView.addSubview(numberCell)
                     requiredWidthFitText = max(requiredWidthFitText, numberCell.intrinsicContentSize.width)
                     linesCount += 1
+                    usedCellCount += 1
                 }
             }
 
-            // adjust ruleThickness to fit the text based on last numberView
+            // Remove excess reusable cells
+            while usedCellCount < reusableCells.count {
+                reusableCells[usedCellCount].removeFromSuperviewWithoutNeedingDisplay()
+                usedCellCount += 1
+            }
+
             if textLayoutManager.textViewportLayoutController.viewportRange != nil {
                 let newGutterWidth = max(requiredWidthFitText, gutterView.minimumThickness)
                 if !newGutterWidth.isAlmostEqual(to: gutterView.frame.size.width, tolerance: .ulpOfOne), newGutterWidth > gutterView.frame.size.width {
