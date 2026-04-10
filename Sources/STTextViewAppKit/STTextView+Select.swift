@@ -508,7 +508,7 @@ extension STTextView {
         updateTypingAttributes()
         updateSelectedRangeHighlight()
         updateSelectedLineHighlight()
-        invalidateGutter()
+        layoutGutter()
         needsDisplay = true
     }
 

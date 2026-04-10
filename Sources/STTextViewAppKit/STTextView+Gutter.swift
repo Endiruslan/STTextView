@@ -47,8 +47,6 @@ extension STTextView {
         }
     }
 
-    private var lastGutterViewportLocation: NSTextLocation?
-
     func layoutGutter() {
         guard let gutterView, let viewportRange = textLayoutManager.textViewportLayoutController.viewportRange else {
             return
@@ -56,21 +54,10 @@ extension STTextView {
 
         gutterView.frame.size.height = contentView.bounds.height
 
-        // Skip full gutter relayout if viewport start hasn't changed (same visible lines)
-        if let lastLoc = lastGutterViewportLocation, lastLoc.compare(viewportRange.location) == .orderedSame {
-            return
-        }
-        lastGutterViewportLocation = viewportRange.location
-
         layoutGutterLineNumbers()
         layoutGutterMarkers()
     }
 
-    /// Force gutter relayout (call after text changes, selection changes, etc.)
-    func invalidateGutter() {
-        lastGutterViewportLocation = nil
-        layoutGutter()
-    }
 
 
     private func layoutGutterLineNumbers() {
