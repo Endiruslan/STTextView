@@ -115,5 +115,6 @@ extension STTextView: NSTextViewportLayoutControllerDelegate {
                 events.didLayoutViewportHandler?(viewportRange)
             }
         }
+
     }
 }

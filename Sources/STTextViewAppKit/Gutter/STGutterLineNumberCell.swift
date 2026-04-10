@@ -62,26 +62,29 @@ final class STGutterLineNumberCell: NSView {
 
     /// Update the cell in-place for view recycling (avoids remove + recreate on every scroll frame).
     func update(firstBaseline: CGFloat, attributes: [NSAttributedString.Key: Any], number: Int) {
-        self.lineNumber = number
+        let numberChanged = self.lineNumber != number
         self.firstBaseline = firstBaseline
 
-        let attributedString = NSAttributedString(string: "\(number)", attributes: attributes)
-        self.ctLine = CTLineCreateWithAttributedString(attributedString)
+        if numberChanged {
+            self.lineNumber = number
+            let attributedString = NSAttributedString(string: "\(number)", attributes: attributes)
+            self.ctLine = CTLineCreateWithAttributedString(attributedString)
 
-        var ascent: CGFloat = 0
-        var descent: CGFloat = 0
-        let typographicsBoundsWidth = CTLineGetTypographicBounds(ctLine, &ascent, &descent, nil)
+            var ascent: CGFloat = 0
+            var descent: CGFloat = 0
+            let typographicsBoundsWidth = CTLineGetTypographicBounds(ctLine, &ascent, &descent, nil)
 
-        self.textVisualCenter = firstBaseline + (descent - ascent) / 2
+            self.textVisualCenter = firstBaseline + (descent - ascent) / 2
 
-        if let paragraphStyle = attributes[.paragraphStyle] as? NSParagraphStyle {
-            let lineHeight = floor(ctLine.height() * paragraphStyle.stLineHeightMultiple)
-            self.textSize = CGSize(width: ceil(typographicsBoundsWidth), height: lineHeight)
-        } else {
-            self.textSize = CGSize(width: ceil(typographicsBoundsWidth), height: ctLine.height())
+            if let paragraphStyle = attributes[.paragraphStyle] as? NSParagraphStyle {
+                let lineHeight = floor(ctLine.height() * paragraphStyle.stLineHeightMultiple)
+                self.textSize = CGSize(width: ceil(typographicsBoundsWidth), height: lineHeight)
+            } else {
+                self.textSize = CGSize(width: ceil(typographicsBoundsWidth), height: ctLine.height())
+            }
+
+            needsDisplay = true
         }
-
-        needsDisplay = true
     }
 
     override var isFlipped: Bool {

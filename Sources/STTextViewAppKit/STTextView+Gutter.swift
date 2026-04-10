@@ -47,15 +47,29 @@ extension STTextView {
         }
     }
 
+    private var lastGutterViewportLocation: NSTextLocation?
+
     func layoutGutter() {
-        guard let gutterView, textLayoutManager.textViewportLayoutController.viewportRange != nil else {
+        guard let gutterView, let viewportRange = textLayoutManager.textViewportLayoutController.viewportRange else {
             return
         }
 
         gutterView.frame.size.height = contentView.bounds.height
 
+        // Skip full gutter relayout if viewport start hasn't changed (same visible lines)
+        if let lastLoc = lastGutterViewportLocation, lastLoc.compare(viewportRange.location) == .orderedSame {
+            return
+        }
+        lastGutterViewportLocation = viewportRange.location
+
         layoutGutterLineNumbers()
         layoutGutterMarkers()
+    }
+
+    /// Force gutter relayout (call after text changes, selection changes, etc.)
+    func invalidateGutter() {
+        lastGutterViewportLocation = nil
+        layoutGutter()
     }
 
 
@@ -129,24 +143,21 @@ extension STTextView {
                 return
             }
 
-            // Count lines before viewport using character offset + newline counting
-            // instead of textElements(for:) which enumerates all paragraphs (O(n))
+            // Count newlines before viewport to determine starting line number.
+            // Direct character scan — O(n) but no ObjC dispatch overhead.
             let startLineIndex: Int
             let docStart = textLayoutManager.documentRange.location
             let vpStart = viewportRange.location
             if docStart.compare(vpStart) == .orderedSame {
                 startLineIndex = 0
-            } else if let preRange = NSTextRange(location: docStart, end: vpStart),
-                      let storage = textContentManager as? NSTextContentStorage,
+            } else if let storage = textContentManager as? NSTextContentStorage,
                       let textStorage = storage.textStorage {
-                let charStart = storage.offset(from: docStart, to: preRange.location)
-                let charEnd = storage.offset(from: docStart, to: preRange.endLocation)
-                let nsRange = NSRange(location: charStart, length: max(0, charEnd - charStart))
-                if nsRange.length > 0, nsRange.location + nsRange.length <= textStorage.length {
+                let endOffset = storage.offset(from: docStart, to: vpStart)
+                if endOffset > 0, endOffset <= textStorage.length {
+                    let nsString = textStorage.string as NSString
                     var count = 0
-                    let string = textStorage.string as NSString
-                    string.enumerateSubstrings(in: nsRange, options: [.byParagraphs, .substringNotRequired]) { _, _, _, _ in
-                        count += 1
+                    for i in 0..<endOffset {
+                        if nsString.character(at: i) == 0x0A { count += 1 }
                     }
                     startLineIndex = count
                 } else {

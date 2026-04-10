@@ -860,7 +860,7 @@ open class STTextView: NSView, NSTextInput, NSTextContent, STTextViewProtocol {
 
             self.updateSelectedRangeHighlight()
             self.updateSelectedLineHighlight()
-            self.layoutGutter()
+            self.invalidateGutter()
         }
     }
 

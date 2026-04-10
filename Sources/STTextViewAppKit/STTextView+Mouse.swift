@@ -29,7 +29,7 @@ extension STTextView {
                 updateTypingAttributes()
                 updateSelectedRangeHighlight()
                 updateSelectedLineHighlight()
-                layoutGutter()
+                invalidateGutter()
                 needsDisplay = true
                 handled = true
             }

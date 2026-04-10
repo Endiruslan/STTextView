@@ -104,7 +104,7 @@ final class STTextFinderClient: NSObject, NSTextFinderClient {
             textView?.updateSelectedRangeHighlight()
             textView?.updateSelectedLineHighlight()
             textView?.updateTypingAttributes()
-            textView?.layoutGutter()
+            textView?.invalidateGutter()
         }
 
         get {
